@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conditional Challenge!</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2c3e50;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #game-container {
+            background-color: #ecf0f1;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+            position: relative;
+        }
+
+        h1 {
+            color: #2980b9;
+            margin-top: 0;
+        }
+
+        #timer-display {
+            font-size: 3.5rem;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #27ae60;
+            font-family: monospace;
+            transition: color 0.3s;
+        }
+
+        .warning { color: #f39c12 !important; }
+        .danger { 
+            color: #c0392b !important; 
+            animation: pulse 0.5s infinite alternate; 
+        }
+
+        @keyframes pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.1); }
+        }
+
+        .stress-text {
+            font-style: italic;
+            color: #c0392b;
+            font-weight: bold;
+            min-height: 24px;
+            margin-bottom: 15px;
+        }
+
+        .question-category {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+
+        .question-text {
+            font-size: 1.4rem;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .option-btn {
+            padding: 15px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            border: 2px solid #bdc3c7;
+            border-radius: 8px;
+            background-color: #fff;
+            transition: all 0.2s;
+        }
+
+        .option-btn:hover:not(:disabled) {
+            background-color: #e0e6ed;
+            border-color: #34495e;
+        }
+
+        .option-btn:disabled {
+            cursor: not-allowed;
+        }
+
+        .correct {
+            background-color: #2ecc71 !important;
+            color: white;
+            border-color: #27ae60;
+        }
+
+        .wrong {
+            background-color: #e74c3c !important;
+            color: white;
+            border-color: #c0392b;
+        }
+
+        #feedback {
+            margin-top: 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            min-height: 30px;
+        }
+
+        .btn-primary {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+
+        /* Screen Management */
+        #quiz-screen, #end-screen { display: none; }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        
+        <div id="start-screen">
+            <h1>The Conditional Challenge!</h1>
+            <p>You will have <strong>exactly 60 seconds</strong> to answer each question.</p>
+            <p>Read fast, think fast, and don't let the clock run out!</p>
+            <button class="btn-primary" onclick="startGame()">Start Game</button>
+        </div>
+
+        <div id="quiz-screen">
+            <div id="timer-display">60</div>
+            <div id="stress-message" class="stress-text"></div>
+            
+            <div id="question-category" class="question-category"></div>
+            <div id="question-text" class="question-text"></div>
+            
+            <div class="options" id="options-container">
+                </div>
+
+            <div id="feedback"></div>
+            <button id="next-btn" class="btn-primary" style="display: none;" onclick="nextQuestion()">Next Question</button>
+        </div>
+
+        <div id="end-screen">
+            <h1>Game Over!</h1>
+            <h2 id="final-score"></h2>
+            <p>Did you survive the jungle?</p>
+            <button class="btn-primary" onclick="resetGame()">Play Again</button>
+        </div>
+
+    </div>
+
+    <script>
+        // Audio Context for the stressful timer sounds
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            if (type === 'tick') {
+                oscillator.type = 'square';
+                oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.05);
+            } else if (type === 'buzzer') {
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 1);
+            }
+        }
+
+        // Quiz Data
+        const questions = [
+            {
+                category: "Zero Conditional",
+                stress: "50 seconds... 40 seconds... watch your step!",
+                text: "When people aren't careful, accidents _________.",
+                options: ["will happen", "happen", "happened", "happens"],
+                correctAnswer: 1
+            },
+            {
+                category: "First Conditional",
+                stress: "Tick-tock, tick-tock... the pressure is rising!",
+                text: "If you swim in safe places, you _________ in any danger.",
+                options: ["won't be", "aren't", "don't be", "will are"],
+                correctAnswer: 0
+            },
+            {
+                category: "Zero Conditional",
+                stress: "BEEP! BEEP! Look out for the crocodile!",
+                text: "A croc sometimes opens its mouth if you _________ it in the eye.",
+                options: ["will hit", "hits", "hit", "hitting"],
+                correctAnswer: 2
+            },
+            {
+                category: "First Conditional",
+                stress: "Time flies in the jungle! Hurry!",
+                text: "If you don't go near a crocodile, it _________ probably _________ you.",
+                options: ["will / ignore", "do / ignore", "is / ignoring", "won't / ignores"],
+                correctAnswer: 0
+            },
+            {
+                category: "First Conditional",
+                stress: "FINAL SECONDS! The bus is leaving!",
+                text: "If you _________ (miss) one bus, you _________ (not have) a long wait.",
+                options: ["miss / don't have", "will miss / won't have", "miss / won't have", "missing / aren't having"],
+                correctAnswer: 2
+            }
+        ];
+
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let timeLeft = 60;
+        let timerInterval;
+        let isQuestionActive = false;
+
+        const screens = {
+            start: document.getElementById('start-screen'),
+            quiz: document.getElementById('quiz-screen'),
+            end: document.getElementById('end-screen')
+        };
+
+        const ui = {
+            timer: document.getElementById('timer-display'),
+            stress: document.getElementById('stress-message'),
+            category: document.getElementById('question-category'),
+            text: document.getElementById('question-text'),
+            options: document.getElementById('options-container'),
+            feedback: document.getElementById('feedback'),
+            nextBtn: document.getElementById('next-btn'),
+            score: document.getElementById('final-score')
+        };
+
+        function showScreen(screenName) {
+            Object.values(screens).forEach(s => s.style.display = 'none');
+            screens[screenName].style.display = 'block';
+        }
+
+        function startGame() {
+            // Need to resume audio context on first user interaction
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            score = 0;
+            currentQuestionIndex = 0;
+            showScreen('quiz');
+            loadQuestion();
+        }
+
+        function loadQuestion() {
+            isQuestionActive = true;
+            ui.feedback.innerHTML = "";
+            ui.nextBtn.style.display = 'none';
+            
+            const q = questions[currentQuestionIndex];
+            ui.category.textContent = `Question ${currentQuestionIndex + 1}: ${q.category}`;
+            ui.text.textContent = q.text;
+            ui.stress.textContent = q.stress;
+            
+            ui.options.innerHTML = "";
+            q.options.forEach((opt, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.textContent = opt;
+                btn.onclick = () => selectAnswer(index, btn);
+                ui.options.appendChild(btn);
+            });
+
+            startTimer();
+        }
+
+        function startTimer() {
+            timeLeft = 60;
+            updateTimerUI();
+            
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimerUI();
+
+                if (timeLeft <= 15 && timeLeft > 0) {
+                    playSound('tick');
+                }
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    handleTimeOut();
+                }
+            }, 1000);
+        }
+
+        function updateTimerUI() {
+            ui.timer.textContent = timeLeft;
+            ui.timer.className = ''; 
+            
+            if (timeLeft <= 15 && timeLeft > 5) {
+                ui.timer.classList.add('warning');
+            } else if (timeLeft <= 5) {
+                ui.timer.classList.add('danger');
+            }
+        }
+
+        function selectAnswer(selectedIndex, selectedBtn) {
+            if (!isQuestionActive) return;
+            isQuestionActive = false;
+            clearInterval(timerInterval);
+
+            const q = questions[currentQuestionIndex];
+            const buttons = ui.options.querySelectorAll('.option-btn');
+            
+            // Disable all buttons
+            buttons.forEach(btn => btn.disabled = true);
+
+            if (selectedIndex === q.correctAnswer) {
+                selectedBtn.classList.add('correct');
+                ui.feedback.textContent = "Correct! 👏";
+                ui.feedback.style.color = "#27ae60";
+                score++;
+            } else {
+                selectedBtn.classList.add('wrong');
+                buttons[q.correctAnswer].classList.add('correct'); // Highlight correct answer
+                ui.feedback.textContent = "Incorrect! 😢";
+                ui.feedback.style.color = "#c0392b";
+            }
+
+            ui.nextBtn.style.display = 'inline-block';
+        }
+
+        function handleTimeOut() {
+            if (!isQuestionActive) return;
+            isQuestionActive = false;
+            playSound('buzzer');
+            
+            const q = questions[currentQuestionIndex];
+            const buttons = ui.options.querySelectorAll('.option-btn');
+            
+            buttons.forEach(btn => btn.disabled = true);
+            buttons[q.correctAnswer].classList.add('correct'); // Show what they missed
+            
+            ui.feedback.textContent = "TIME'S UP! ⏰";
+            ui.feedback.style.color = "#c0392b";
+            ui.nextBtn.style.display = 'inline-block';
+        }
+
+        function nextQuestion() {
+            currentQuestionIndex++;
+            if (currentQuestionIndex < questions.length) {
+                loadQuestion();
+            } else {
+                endGame();
+            }
+        }
+
+        function endGame() {
+            showScreen('end');
+            ui.score.textContent = `You got ${score} out of ${questions.length} correct!`;
+        }
+
+        function resetGame() {
+            startGame();
+        }
+    </script>
+</body>
+</html>
