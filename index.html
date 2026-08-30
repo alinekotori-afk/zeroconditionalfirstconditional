@@ -175,33 +175,31 @@
     </div>
 
     <script>
-        // Audio Context for the stressful timer sounds
+        // Audio Context Setup
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const audioCtx = new AudioContext();
 
-        function playSound(type) {
+        // Sound Engine Function
+        function playTone(freq, type, duration, volume) {
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
             const oscillator = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            
+            // Envelope to make it sound percussive and avoid clicks
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            
             oscillator.connect(gainNode);
             gainNode.connect(audioCtx.destination);
             
-            if (type === 'tick') {
-                oscillator.type = 'square';
-                oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
-                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
-                oscillator.start();
-                oscillator.stop(audioCtx.currentTime + 0.05);
-            } else if (type === 'buzzer') {
-                oscillator.type = 'sawtooth';
-                oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
-                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
-                oscillator.start();
-                oscillator.stop(audioCtx.currentTime + 1);
-            }
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + duration);
         }
 
         // Quiz Data
@@ -246,154 +244,7 @@
         let currentQuestionIndex = 0;
         let score = 0;
         let timeLeft = 60;
+        
         let timerInterval;
+        let soundInterval;
         let isQuestionActive = false;
-
-        const screens = {
-            start: document.getElementById('start-screen'),
-            quiz: document.getElementById('quiz-screen'),
-            end: document.getElementById('end-screen')
-        };
-
-        const ui = {
-            timer: document.getElementById('timer-display'),
-            stress: document.getElementById('stress-message'),
-            category: document.getElementById('question-category'),
-            text: document.getElementById('question-text'),
-            options: document.getElementById('options-container'),
-            feedback: document.getElementById('feedback'),
-            nextBtn: document.getElementById('next-btn'),
-            score: document.getElementById('final-score')
-        };
-
-        function showScreen(screenName) {
-            Object.values(screens).forEach(s => s.style.display = 'none');
-            screens[screenName].style.display = 'block';
-        }
-
-        function startGame() {
-            // Need to resume audio context on first user interaction
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-            score = 0;
-            currentQuestionIndex = 0;
-            showScreen('quiz');
-            loadQuestion();
-        }
-
-        function loadQuestion() {
-            isQuestionActive = true;
-            ui.feedback.innerHTML = "";
-            ui.nextBtn.style.display = 'none';
-            
-            const q = questions[currentQuestionIndex];
-            ui.category.textContent = `Question ${currentQuestionIndex + 1}: ${q.category}`;
-            ui.text.textContent = q.text;
-            ui.stress.textContent = q.stress;
-            
-            ui.options.innerHTML = "";
-            q.options.forEach((opt, index) => {
-                const btn = document.createElement('button');
-                btn.className = 'option-btn';
-                btn.textContent = opt;
-                btn.onclick = () => selectAnswer(index, btn);
-                ui.options.appendChild(btn);
-            });
-
-            startTimer();
-        }
-
-        function startTimer() {
-            timeLeft = 60;
-            updateTimerUI();
-            
-            clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                updateTimerUI();
-
-                if (timeLeft <= 15 && timeLeft > 0) {
-                    playSound('tick');
-                }
-
-                if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    handleTimeOut();
-                }
-            }, 1000);
-        }
-
-        function updateTimerUI() {
-            ui.timer.textContent = timeLeft;
-            ui.timer.className = ''; 
-            
-            if (timeLeft <= 15 && timeLeft > 5) {
-                ui.timer.classList.add('warning');
-            } else if (timeLeft <= 5) {
-                ui.timer.classList.add('danger');
-            }
-        }
-
-        function selectAnswer(selectedIndex, selectedBtn) {
-            if (!isQuestionActive) return;
-            isQuestionActive = false;
-            clearInterval(timerInterval);
-
-            const q = questions[currentQuestionIndex];
-            const buttons = ui.options.querySelectorAll('.option-btn');
-            
-            // Disable all buttons
-            buttons.forEach(btn => btn.disabled = true);
-
-            if (selectedIndex === q.correctAnswer) {
-                selectedBtn.classList.add('correct');
-                ui.feedback.textContent = "Correct! 👏";
-                ui.feedback.style.color = "#27ae60";
-                score++;
-            } else {
-                selectedBtn.classList.add('wrong');
-                buttons[q.correctAnswer].classList.add('correct'); // Highlight correct answer
-                ui.feedback.textContent = "Incorrect! 😢";
-                ui.feedback.style.color = "#c0392b";
-            }
-
-            ui.nextBtn.style.display = 'inline-block';
-        }
-
-        function handleTimeOut() {
-            if (!isQuestionActive) return;
-            isQuestionActive = false;
-            playSound('buzzer');
-            
-            const q = questions[currentQuestionIndex];
-            const buttons = ui.options.querySelectorAll('.option-btn');
-            
-            buttons.forEach(btn => btn.disabled = true);
-            buttons[q.correctAnswer].classList.add('correct'); // Show what they missed
-            
-            ui.feedback.textContent = "TIME'S UP! ⏰";
-            ui.feedback.style.color = "#c0392b";
-            ui.nextBtn.style.display = 'inline-block';
-        }
-
-        function nextQuestion() {
-            currentQuestionIndex++;
-            if (currentQuestionIndex < questions.length) {
-                loadQuestion();
-            } else {
-                endGame();
-            }
-        }
-
-        function endGame() {
-            showScreen('end');
-            ui.score.textContent = `You got ${score} out of ${questions.length} correct!`;
-        }
-
-        function resetGame() {
-            startGame();
-        }
-    </script>
-</body>
-</html>
