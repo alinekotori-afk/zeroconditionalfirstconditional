@@ -136,6 +136,12 @@
         }
 
         #quiz-screen, #end-screen { display: none; }
+        
+        .audio-warning {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body>
@@ -146,7 +152,8 @@
             <h1>The Conditional Challenge!</h1>
             <p>You will have <strong>exactly 60 seconds</strong> to answer each question.</p>
             <p>Read fast, think fast, and don't let the clock run out!</p>
-            <button class="btn-primary" onclick="startGame()">Start Game</button>
+            <button id="start-btn" class="btn-primary">Start Game</button>
+            <p class="audio-warning">Make sure your device volume is UP and the mute switch is OFF to hear the timer.</p>
         </div>
 
         <div id="quiz-screen">
@@ -159,14 +166,14 @@
             <div class="options" id="options-container"></div>
 
             <div id="feedback"></div>
-            <button id="next-btn" class="btn-primary" style="display: none;" onclick="nextQuestion()">Next Question</button>
+            <button id="next-btn" class="btn-primary" style="display: none;">Next Question</button>
         </div>
 
         <div id="end-screen">
             <h1>Game Over!</h1>
             <h2 id="final-score"></h2>
             <p>Did you survive the challenge?</p>
-            <button class="btn-primary" onclick="resetGame()">Play Again</button>
+            <button id="restart-btn" class="btn-primary">Play Again</button>
         </div>
 
     </div>
@@ -174,27 +181,53 @@
     <script>
         let audioCtx;
         
-        function playTone(freq, type, duration, volume) {
-            if (!audioCtx) return;
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            
-            oscillator.type = type;
-            oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
-            
-            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-            gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + 0.01);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            
-            oscillator.start(audioCtx.currentTime);
-            oscillator.stop(audioCtx.currentTime + duration);
+        // --- AUDIO ENGINE ---
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
         }
 
+        function unlockAudioForMobile() {
+            // Plays a silent sound immediately on click to unlock the browser's audio engine
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(0);
+            osc.stop(audioCtx.currentTime + 0.001);
+        }
+
+        function playTone(freq, type, duration, volume) {
+            try {
+                if (!audioCtx || audioCtx.state === 'suspended') return;
+                
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                oscillator.type = type;
+                oscillator.frequency.value = freq;
+                
+                gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + duration);
+            } catch (e) {
+                console.error("Audio playback error", e);
+            }
+        }
+
+        // --- GAME DATA ---
         const questions = [
             {
                 category: "Zero Conditional",
@@ -331,25 +364,30 @@
             score: document.getElementById('final-score')
         };
 
+        // --- EVENT LISTENERS ---
+        document.getElementById('start-btn').addEventListener('click', () => {
+            initAudio();
+            unlockAudioForMobile();
+            startGame();
+        });
+
+        document.getElementById('next-btn').addEventListener('click', nextQuestion);
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            initAudio();
+            unlockAudioForMobile();
+            startGame();
+        });
+
+        // --- GAME LOGIC ---
         function showScreen(screenName) {
             Object.values(screens).forEach(s => s.style.display = 'none');
             screens[screenName].style.display = 'block';
         }
 
         function startGame() {
-            if (!audioCtx) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                audioCtx = new AudioContext();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-            
             score = 0;
             currentQuestionIndex = 0;
-            
             questions.sort(() => Math.random() - 0.5);
-            
             showScreen('quiz');
             loadQuestion();
         }
@@ -380,14 +418,16 @@
             clearInterval(soundInterval);
             
             if (isDramatic) {
+                // Dramatic, fast, dissonant ticking (Tension)
                 soundInterval = setInterval(() => {
-                    playTone(dramaticState ? 1000 : 1200, 'square', 0.1, 0.05);
+                    playTone(dramaticState ? 800 : 850, 'triangle', 0.1, 0.4);
                     dramaticState = !dramaticState;
                 }, 250);
             } else {
-                playTone(400, 'sine', 0.1, 0.1); 
+                // Normal ticking
+                playTone(400, 'triangle', 0.1, 0.2); 
                 soundInterval = setInterval(() => {
-                    playTone(tickTockState ? 500 : 400, 'sine', 0.1, 0.1);
+                    playTone(tickTockState ? 600 : 400, 'triangle', 0.1, 0.2);
                     tickTockState = !tickTockState;
                 }, 1000);
             }
@@ -403,6 +443,8 @@
             
             updateTimerUI();
             clearInterval(timerInterval);
+            
+            // Start audio synchronously with the logic
             startClockSound(false); 
 
             timerInterval = setInterval(() => {
@@ -448,14 +490,14 @@
                 selectedBtn.classList.add('correct');
                 ui.feedback.textContent = "Correct! 👏";
                 ui.feedback.style.color = "#27ae60";
-                playTone(800, 'sine', 0.3, 0.1); 
+                playTone(1200, 'square', 0.2, 0.3); // High ping
                 score++;
             } else {
                 selectedBtn.classList.add('wrong');
                 buttons[q.correctAnswer].classList.add('correct');
                 ui.feedback.textContent = "Incorrect! 😢";
                 ui.feedback.style.color = "#c0392b";
-                playTone(200, 'sawtooth', 0.4, 0.1); 
+                playTone(200, 'sawtooth', 0.4, 0.4); // Low err sound
             }
 
             ui.nextBtn.style.display = 'inline-block';
@@ -466,7 +508,7 @@
             isQuestionActive = false;
             
             stopClockSound();
-            playTone(150, 'sawtooth', 1, 0.2); 
+            playTone(150, 'sawtooth', 1, 0.5); // Loud long buzzer
             
             const q = questions[currentQuestionIndex];
             const buttons = ui.options.querySelectorAll('.option-btn');
@@ -492,10 +534,6 @@
             stopClockSound();
             showScreen('end');
             ui.score.textContent = `You got ${score} out of ${questions.length} correct!`;
-        }
-
-        function resetGame() {
-            startGame();
         }
     </script>
 </body>
